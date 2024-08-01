@@ -37,7 +37,7 @@ class QuestionController extends Controller
         ]);
 
         $question = new Question();
-        $question->question = '/' . $request->input('question');
+        $question->question = $request->input('question');
         $question->answer = $request->input('answer');
 
         $question->save();
@@ -74,7 +74,7 @@ class QuestionController extends Controller
 
         $question = Question::findOrFail($id);
 
-        $question->question = '/' . $request->input('question');
+        $question->question = $request->input('question');
         $question->answer = $request->input('answer');
         $question->save();
 

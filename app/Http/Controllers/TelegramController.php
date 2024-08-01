@@ -2,55 +2,71 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Question;
-use App\Services\TelegramBot;
 use Illuminate\Http\Request;
+use Telegram\Bot\Api;
+use Telegram\Bot\Keyboard\Keyboard;
+use App\Models\Question;
 
 class TelegramController extends Controller
 {
-    protected $telegramBot;
+    protected $telegram;
 
-    public function __construct(TelegramBot $telegramBot)
+    public function __construct()
     {
-        $this->telegramBot = $telegramBot;
+        $this->telegram = new Api(env('TELEGRAM_BOT_TOKEN'));
     }
 
-    public function inbound(Request $request){
-        \Log::info($request->all());
+    public function inbound(Request $request)
+    {
+        $update = $this->telegram->getWebhookUpdates();
 
-        // get telegram chat_id and reply to
-        $chat_id            = $request->message['from']['id'];
-        $reply_to_message   = $request->message['message_id'];
-        $message_text       = $request->message['text'] ?? '';
+        if ($update->isType('message')) {
+            $message = $update->getMessage();
+            $chatId = $message->getChat()->getId();
+            $text = $message->getText();
 
-        \Log::info("chat_id: {$chat_id}");
-        \Log::info("reply_to_message: {$reply_to_message}");
+            if ($text === '/start') {
+                $this->sendDynamicKeyboard($chatId);
+            } else {
+                $question = Question::where('question', $text)->first();
+                if ($question) {
+                    $responseText = $this->cleanHTML($question->answer);
+                } else {
+                    $responseText = 'Unknown command, please use /start to see the menu.';
+                }
 
-        // If first time -> send first time message
-        if(!cache()->has("chat_id_{$chat_id}")){
-
-            $text = "Welcome to ImageDetectTextBOT 🤖 \r\n";
-            $text.= "Please upload a IMAGE and enjoy the magic 🪄";
-
-            cache()->put("chat_id_{$chat_id}",true,now()->addMinute(60));
-        } else if ($question = Question::where('question', strtolower($message_text))->first()) {
-            $text = $this->cleanHTML($question->answer);
-        } else if(isset($request->message['photo'])){ // If chat is photo -> Extract text from photo
-            // Get image_url...
-            $image_url = app('telegram_bot')->getImageUrl($request->message['photo']);
-
-            // Extract text from image
-            $text = app('image_detect_text')->getTextFromImage($image_url);
-
-        }else{        // Else -> Send default message
-
-            $text = "ImageDetectTextBOT 🤖\r\nPlease upload an IMAGE!";
+                $this->telegram->sendMessage([
+                    'chat_id' => $chatId,
+                    'text' => $responseText,
+                ]);
+            }
         }
 
-        // telegram service -> sendMessage($text, $chat_id, $reply_to_message, 'HTML')
-        $result = $this->telegramBot->sendMessage($text, $chat_id, $reply_to_message, 'HTML');
+        return response()->json(['status' => 'ok']);
+    }
 
-        return response()->json($result,200);
+    private function sendDynamicKeyboard($chatId)
+    {
+        $questions = Question::all();
+        $keyboardButtons = [];
+
+        foreach ($questions as $question) {
+            $keyboardButtons[] = [
+                'text' => $question->question,
+            ];
+        }
+
+        $keyboard = Keyboard::make([
+            'keyboard' => array_chunk($keyboardButtons, 2),
+            'resize_keyboard' => true,
+            'one_time_keyboard' => true,
+        ]);
+
+        $this->telegram->sendMessage([
+            'chat_id' => $chatId,
+            'text' => 'Please choose button',
+            'reply_markup' => $keyboard,
+        ]);
     }
 
     private function cleanHTML($text) {
