@@ -47,8 +47,7 @@ class TelegramBot
      * @param  mixed $reply_to_message_id
      * @return void
      */
-    public function sendMessage($text = '', $chat_id, $reply_to_message_id){
-
+    public function sendMessage($text = '', $chat_id, $reply_to_message_id, $parse_mode = 'Markdown'){
         // Default result array
         $result = ['success'=>false,'body'=>[]];
 
@@ -57,6 +56,7 @@ class TelegramBot
             'chat_id'               => $chat_id,
             'reply_to_message_id'   => $reply_to_message_id,
             'text'                  => $text,
+            'parse_mode'            => $parse_mode, // Set the parse mode to HTML or Markdown
         ];
 
         // Create url -> https://api.telegram.org/bot{token}/sendMessage
